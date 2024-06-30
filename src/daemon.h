@@ -15,4 +15,7 @@ class crc_files_info {
 public:
 	crc_files_info(fs::path directory_);
 	void update();
+	fs::path get_dir() {
+		return directory;
+	}
 };
