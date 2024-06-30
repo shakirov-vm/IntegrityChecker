@@ -5,6 +5,8 @@
 #include <sys/time.h>
 #include <unistd.h>
 #include <syslog.h>
+#include <vector>
+#include <string>
 
 #include <sys/inotify.h>
 
@@ -17,7 +19,6 @@
 #define INOTIFY_FLAGS (IN_CREATE | IN_DELETE | IN_DELETE_SELF | IN_MODIFY | IN_MOVED_FROM | IN_MOVED_TO)
 
 // maybe create pthread_sigmask + sigwait?
-// FIXME Global values? need std::atomic
 std::atomic_int queue = 0;
 
 void signal_usr1_handler(int signum) {
@@ -57,12 +58,34 @@ void register_signals(int seconds) {
 	}
 }
 
-// Rewrite with common string and parameters
+std::string parse_args(int argc, char *argv[], std::string target_arg) {
+
+	std::vector<std::string> args(argc - 1);
+
+	for (int i = 0; i < argc - 1; i++) {
+		args[i] = std::string(argv[i + 1]);
+	}
+	if (target_arg == "--dir" || target_arg == "--timeout") {
+		for (int i = 1; i < argc - 1; i++)
+			if (std::string(argv[i]) == target_arg)
+				return std::string(argv[i + 1]);
+	} else if (target_arg == "--inotify") {
+		for (int i = 1; i < argc; i++)
+			if (std::string(argv[i]) == target_arg)
+				return std::string("chosen");
+	}
+	return std::string("");
+}
+
 fs::path get_path_to_dir(int argc, char *argv[]) {
 
 	fs::path path_to_dir;
 
-	if (argc != EXPECTED_NUM_ARGS) {
+	std::string dir_parse_args = parse_args(argc, argv, std::string("--dir"));
+
+	if (dir_parse_args != "")
+		path_to_dir = fs::path(dir_parse_args);
+	else {
 		const char* env_path_to_dir = std::getenv(ENV_TARGET_DIRECTORY);
 
 		if (env_path_to_dir != nullptr)
@@ -71,8 +94,7 @@ fs::path get_path_to_dir(int argc, char *argv[]) {
 			syslog(LOG_INFO, "The path to the directory was not entered!");
 			std::exit(1);
 	    }
-	} else 
-		path_to_dir = fs::path(argv[1]);
+	}
 
 	if (!fs::exists(path_to_dir)) {		
 		syslog(LOG_INFO, "Directory <%s> does not exist!", path_to_dir.string().c_str());
@@ -86,7 +108,12 @@ int get_interrupt_time(int argc, char *argv[]) {
 
 	int seconds = 0;
 
-	if (argc != EXPECTED_NUM_ARGS) {
+	std::string timeout_parse_args = parse_args(argc, argv, std::string("--timeout"));
+
+	if (timeout_parse_args != "") {
+		std::stringstream s(timeout_parse_args);
+		s >> seconds;
+	} else {
 		const char* env_interrupt_time = std::getenv(ENV_INTERRUPT_TIME);
 
 		if (env_interrupt_time != nullptr) {
@@ -98,9 +125,6 @@ int get_interrupt_time(int argc, char *argv[]) {
 			syslog(LOG_INFO, "Interrupt timeout was not entered!");
 			std::exit(1);
 	    }
-	} else {
-		std::stringstream s(argv[2]);
-		s >> seconds;
 	}
 
 	if (!seconds) {
@@ -109,6 +133,18 @@ int get_interrupt_time(int argc, char *argv[]) {
 	}
 
 	return seconds;
+}
+
+bool use_inotify(int argc, char *argv[]) {
+
+	int seconds = 0;
+
+	std::string inotify = parse_args(argc, argv, std::string("--inotify"));
+
+	if (inotify == "chosen")
+		return true;
+	else
+		return false;
 }
 
 void daemon(crc_files_info& info) {

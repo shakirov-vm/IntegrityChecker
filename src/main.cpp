@@ -10,8 +10,10 @@ int main(int argc, char *argv[]) {
 	crc_files_info info(get_path_to_dir(argc, argv));
 	register_signals(get_interrupt_time(argc, argv));
 
-//	daemon(info);
-	inotify_daemon(info);
+	if (use_inotify(argc, argv))
+		inotify_daemon(info);
+	else
+		daemon(info);
 	
 	closelog();
 	return 0;
