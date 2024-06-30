@@ -26,6 +26,7 @@ uint32_t get_crc32_file(const fs::directory_entry& dir_entry) {
     file.close();
 
 	uint32_t crc32 = crc32_ieee(buffer, length);
+
 	delete[]buffer;
 
 	return crc32;
@@ -49,6 +50,7 @@ crc_files_info::crc_files_info(fs::path directory_) {
 void crc_files_info::update() {
 
 	std::vector<std::pair<std::string, std::string>> failed_cases;
+	json all_cases({"path", "null"});
 	bool ok = true;
 
 	for (auto& it: files_info) {
@@ -60,7 +62,13 @@ void crc_files_info::update() {
 
   		if (!fs::exists(fs::path(it.first))) {
 			failed_cases.push_back(std::make_pair(dir_entry.path().string(), "ABSENT"));
-			ok = false;  			
+			ok = false;
+
+			all_cases.push_back({
+				{"path", dir_entry.path().string()},
+				{"status", "ABSENT"},
+			});
+			continue;
   		}
 
 		uint32_t new_crc32 = get_crc32_file(dir_entry);
@@ -69,7 +77,21 @@ void crc_files_info::update() {
 			out << "FAIL: " << "old: " << it.second << ", new: " << new_crc32;
 			failed_cases.push_back(std::make_pair(dir_entry.path().string(), out.str()));
 			ok = false;
+
+			all_cases.push_back({
+				{"path", dir_entry.path().string()},
+				{"etalon_crc32", it.second},
+				{"result_crc32", new_crc32},
+				{"status", "FAIL"},
+			});
+			continue;
 		}
+		all_cases.push_back({
+			{"path", dir_entry.path().string()},
+			{"etalon_crc32", it.second},
+			{"result_crc32", new_crc32},
+			{"status", "OK"},
+		});
 	}
 	for (const auto& dir_entry : fs::recursive_directory_iterator(directory)) {
 
@@ -79,6 +101,11 @@ void crc_files_info::update() {
 		if (files_info.find(dir_entry.path().string()) == files_info.end()) {
 			failed_cases.push_back(std::make_pair(dir_entry.path().string(), "NEW"));
 			ok = false;
+
+			all_cases.push_back({
+				{"path", dir_entry.path().string()},
+				{"status", "NEW"},
+			});
 		}
 	}
 	if (ok)
@@ -89,6 +116,12 @@ void crc_files_info::update() {
 			syslog(LOG_INFO, "    (%s - %s)", it.first.c_str(), it.second.c_str());
 		}
 	}
+	
+  	std::filesystem::create_directory("/tmp/crc32_daemon");
+
+	std::ofstream json_file("/tmp/crc32_daemon/dump.json", std::fstream::out | std::fstream::app);
+	json_file << all_cases.dump(4);
+	json_file.close();
 }
 
 

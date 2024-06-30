@@ -3,6 +3,9 @@
 
 #pragma once
 
+#include <nlohmann/json.hpp>
+using json = nlohmann::json;
+
 namespace fs = std::filesystem;
 
 uint32_t crc32_ieee(const uint8_t *data, size_t len);
