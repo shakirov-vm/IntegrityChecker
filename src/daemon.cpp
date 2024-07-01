@@ -50,7 +50,7 @@ crc_files_info::crc_files_info(fs::path directory_) {
 void crc_files_info::update() {
 
 	std::vector<std::pair<std::string, std::string>> failed_cases;
-	json all_cases({"path", "null"});
+	json all_cases({"", ""});
 	bool ok = true;
 
 	for (auto& it: files_info) {
@@ -119,7 +119,7 @@ void crc_files_info::update() {
 	
   	std::filesystem::create_directory("/tmp/crc32_daemon");
 
-	std::ofstream json_file("/tmp/crc32_daemon/dump.json", std::fstream::out | std::fstream::app);
+	std::ofstream json_file("/tmp/crc32_daemon/dump.json", std::fstream::out | std::fstream::trunc);
 	json_file << all_cases.dump(4);
 	json_file.close();
 }
